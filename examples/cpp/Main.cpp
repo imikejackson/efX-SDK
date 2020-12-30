@@ -18,20 +18,99 @@
 // WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 // USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <vector>
+#include <cstdio>
+#include <string>
+#include <sstream>
+#include <cstdlib>
+#include <memory>
+#include <iostream>
+#include <iomanip>
+#include <fstream>
+
 #include "efX_SDK.h"
 
-using namespace NSI::efX;
+//using namespace NSI::efX;
 
-int main()
+int main(int argc, char* argv[])
 {
-	Volume* vol = Volume::Create();
-	vol->open(L"example.nsihdr");
+	using VolumePtr = std::shared_ptr<NSI::efX::Volume>;
 
-	float* slice = new float[vol->slice_width() * vol->slice_height()];
-	vol->read_slice(slice, 39);
+	if (argc != 3)
+	{
+		std::cout << "This program needs 2 argument which is the input file path and the output file path." << std::endl;
+		return 1;
+	}
 
-	nsi_efx_save_gray_tif32_w(L"slice.tif", slice, vol->slice_height(), vol->slice_width());
+	std::string inputFile = argv[1];
+	std::string outputFile = argv[2];
 
-	delete vol;
-	delete[] slice;
+	size_t pos = outputFile.find_last_of(".");
+	std::string outputName = outputFile.substr(0, pos);
+	std::string outputExt = outputFile.substr(pos);
+
+	std::cout << outputFile << std::endl;
+	std::cout << outputName << std::endl;
+	std::cout << outputExt << std::endl;
+
+	std::stringstream ss;
+	ss << outputName << ".json";
+	
+	std::ofstream info (ss.str(), std::ios_base::out);
+	if (!info.is_open())
+	{
+		std::cout << "Could not open Info file for writing." << std::endl;
+		return 1;
+	}
+
+	VolumePtr vol = VolumePtr(NSI::efX::Volume::Create());
+	vol->open(inputFile.c_str());
+
+	size_t width = static_cast<size_t>(vol->slice_width());
+	size_t height = static_cast<size_t>(vol->slice_height());
+	size_t depth = static_cast<size_t>(vol->num_slices());
+	info << "{" << std::endl;
+	info << "\"Comment\":" << "\" This file was produced by the efX_SDK program. \"," << std::endl;
+	info << "\"Voxels\":[" << width  << "," << height << "," << depth  << "],"<<  std::endl;
+	info << "\"Location\": {" << std::endl;
+	NSI::efX::Vec3_d vmin = vol->vmin();
+	info << "  \"Min\": [" << vmin.x  << "," << vmin.z << "," << vmin.y << "]," << std::endl;
+	NSI::efX::Vec3_d vmax = vol->vmax();
+	info << "  \"Max\": [" << vmax.x  << "," << vmax.z << "," << vmax.y << "]" << std::endl;
+	info << "  }," << std::endl;
+	NSI::efX::Vec3_d voxSize = vol->voxel_size();
+	info << "\"Voxel Size\": ["<< voxSize.x << ", " << voxSize.z << ", " << voxSize.y << "]," << std::endl;
+	info << "\"DataRange\": [" << vol->data_min() << ", " << vol->data_max() << "]," << std::endl;
+	info << "\"File\": {" << std::endl;
+	info << "  \"Name\":\"" << outputName << ".raw\"," << std::endl;
+	info << "  \"NbSlices\": " << depth << std::endl;
+	info << "  }" << std::endl;
+	info << "}" << std::endl;
+	info.close();
+
+
+	std::vector<float> slice;
+	slice.resize(width * height);
+	size_t totalBytes = depth * slice.size();
+
+	ss.str("");
+	ss << outputName << ".raw";
+	FILE* f = fopen(ss.str().c_str(), "wb");
+	if (f == nullptr)
+	{
+		std::cout << "Could not open output file for writing." << std::endl;
+		return 1;
+	}
+
+	for(size_t i = 0; i < depth;i++)
+	{
+		vol->read_slice(slice.data(), i);
+		fwrite(slice.data(), 4, slice.size(), f);
+	}
+	fclose(f);
+	vol->close();
+
+	return 0;
 }

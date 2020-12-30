@@ -51,9 +51,9 @@ int main(int argc, char* argv[])
 	std::string outputName = outputFile.substr(0, pos);
 	std::string outputExt = outputFile.substr(pos);
 
-	std::cout << outputFile << std::endl;
-	std::cout << outputName << std::endl;
-	std::cout << outputExt << std::endl;
+	//std::cout << outputFile << std::endl;
+	//std::cout << outputName << std::endl;
+	//std::cout << outputExt << std::endl;
 
 	std::stringstream ss;
 	ss << outputName << ".json";
